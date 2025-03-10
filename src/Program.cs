@@ -15,26 +15,26 @@ if (command == "decode")
     Console.Error.WriteLine("Logs from your program will appear here!");
 
     // Uncomment this line to pass the first stage
-    //var encodedValue = param;
-    //if (Char.IsDigit(encodedValue[0]))
-    //{
-    //    // Example: "5:hello" -> "hello"
-    //    var colonIndex = encodedValue.IndexOf(':');
-    //    if (colonIndex != -1)
-    //    {
-    //        var strLength = int.Parse(encodedValue[..colonIndex]);
-    //        var strValue = encodedValue.Substring(colonIndex + 1, strLength);
-    //        Console.WriteLine(JsonSerializer.Serialize(strValue));
-    //    }
-    //    else
-    //    {
-    //        throw new InvalidOperationException("Invalid encoded value: " + encodedValue);
-    //    }
-    //}
-    //else
-    //{
-    //    throw new InvalidOperationException("Unhandled encoded value: " + encodedValue);
-    //}
+    var encodedValue = param;
+    if (Char.IsDigit(encodedValue[0]))
+    {
+       // Example: "5:hello" -> "hello"
+       var colonIndex = encodedValue.IndexOf(':');
+       if (colonIndex != -1)
+       {
+           var strLength = int.Parse(encodedValue[..colonIndex]);
+           var strValue = encodedValue.Substring(colonIndex + 1, strLength);
+           Console.WriteLine(JsonSerializer.Serialize(strValue));
+       }
+       else
+       {
+           throw new InvalidOperationException("Invalid encoded value: " + encodedValue);
+       }
+    }
+    else
+    {
+       throw new InvalidOperationException("Unhandled encoded value: " + encodedValue);
+    }
 }
 else
 {
