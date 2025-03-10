@@ -35,8 +35,8 @@ if (command == "decode")
     else if (encodedValue[0] == 'i' && encodedValue[encodeValueLength - 1] == 'e')
     {
         var strValue = encodedValue.Substring(1, encodeValueLength-2);
-        var intVal = int.Parse(strValue);
-        Console.WriteLine($"{intVal}");
+        var numVal = long.Parse(strValue);
+        Console.WriteLine($"{numVal}");
     }
     else
     {
