@@ -35,7 +35,8 @@ if (command == "decode")
     else if (encodedValue[0] == 'i' && encodedValue[encodeValueLength - 1] == 'e')
     {
         var strValue = encodedValue.Substring(1, encodeValueLength-2);
-        Console.WriteLine(JsonSerializer.Serialize(strValue));
+        var intVal = int.Parse(strValue);
+        Console.WriteLine($"{intVal}");
     }
     else
     {
