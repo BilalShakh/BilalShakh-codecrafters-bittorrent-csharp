@@ -7,22 +7,42 @@ class Decode
 {
     public static int DecodeInput(string data, int start, out string result)
     {
-        if (data[start] == 'i')
+        Console.Error.WriteLine($"Decoding index: {start} data: {data[start]}");
+        switch (data[start])
         {
-            return DecodeInt(data, start, out result);
+            case 'i':
+                return DecodeInt(data, start, out result);
+            case 'l':
+                return DecodeList(data, start, out result);
+            case 'd':
+                return DecodeDictionary(data, start, out result);
+            default:
+                if (char.IsDigit(data[start]))
+                {
+                    return DecodeString(data, start, out result);
+                }
+                else
+                {
+                    throw new Exception("Invalid data");
+                }
         }
-        else if (char.IsDigit(data[start]))
+    }
+
+
+    private static int DecodeDictionary(string data, int start, out string result)
+    {
+        Dictionary<string, string> resultDict = [];
+        start++;
+
+        while (data[start] != 'e')
         {
-            return DecodeString(data, start, out result);
+            start = DecodeString(data, start, out string key);
+            start = DecodeInput(data, start, out string value);
+            resultDict.Add(key, value);
         }
-        else if (data[start] == 'l')
-        {
-            return DecodeList(data, start, out result);
-        }
-        else
-        {
-            throw new Exception("Invalid data");
-        }
+
+        result = "{" + string.Join(',', resultDict.Select(kv => $"{kv.Key}:{kv.Value}")) + "}";
+        return start + 1;
     }
 
     private static int DecodeList(string data, int start, out string result)
@@ -52,7 +72,7 @@ class Decode
 
         int length = int.Parse(lengthSB.ToString());
         result = JsonSerializer.Serialize(data.Substring(start + lengthSB.Length + 1, length));
-        return start + length + 2;
+        return start + length + lengthSB.Length + 1;
     }
 
     private static int DecodeInt(string data, int start, out string result)
