@@ -30,7 +30,7 @@ class CommandHandler
 
                 string infoMarker = "4:infod";
                 int hashingStartIndex = fileContentsString.IndexOf(infoMarker) + infoMarker.Length - 1;
-                byte[] fileContentsToHash = fileContents[hashingStartIndex..];
+                byte[] fileContentsToHash = fileContents[hashingStartIndex..^1];
                 byte[] hashedFileContents = SHA1.HashData(fileContentsToHash);
                 string InfoHash = Convert.ToHexString(hashedFileContents).ToLower();
 
