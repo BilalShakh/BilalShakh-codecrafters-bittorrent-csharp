@@ -1,4 +1,5 @@
 ﻿using codecrafters_bittorrent.src.Data;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
@@ -26,8 +27,16 @@ class CommandHandler
                 string fileContentsString = Encoding.ASCII.GetString(fileContents);
                 Decode.DecodeInput(fileContentsString, 0, out string decodedFileContents);
                 TorrentFile torrentFile = JsonSerializer.Deserialize<TorrentFile>(decodedFileContents, jsonSerializerOptions)!;
+
+                string infoMarker = "4:infod";
+                int hashingStartIndex = fileContentsString.IndexOf(infoMarker) + infoMarker.Length - 1;
+                byte[] fileContentsToHash = fileContents[hashingStartIndex..];
+                byte[] hashedFileContents = SHA1.HashData(fileContentsToHash);
+                string InfoHash = Convert.ToHexString(hashedFileContents).ToLower();
+
                 Console.WriteLine($"Tracker URL: {torrentFile.Announce}");
                 Console.WriteLine($"Length: {torrentFile.Info.Length}");
+                Console.WriteLine($"Info Hash: {InfoHash}");
                 break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
