@@ -7,7 +7,6 @@ class Decode
 {
     public static int DecodeInput(string data, int start, out string result)
     {
-        Console.Error.WriteLine($"Decoding index: {start} data: {data[start]}");
         switch (data[start])
         {
             case 'i':
