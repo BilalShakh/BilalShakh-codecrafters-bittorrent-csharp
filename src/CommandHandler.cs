@@ -37,6 +37,7 @@ class CommandHandler
                 Console.WriteLine($"Tracker URL: {torrentFile.Announce}");
                 Console.WriteLine($"Length: {torrentFile.Info.Length}");
                 Console.WriteLine($"Info Hash: {InfoHash}");
+                Console.WriteLine($"Piece Length: {torrentFile.Info.PieceLength}");
                 break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
