@@ -28,7 +28,7 @@ class CommandHandler
                 Decode.DecodeInput(fileContentsString, 0, out string decodedFileContents);
                 TorrentFile torrentFile = JsonSerializer.Deserialize<TorrentFile>(decodedFileContents, jsonSerializerOptions)!;
 
-                string InfoHash = GetInfoHash(fileContentsString);
+                string InfoHash = GetInfoHash(fileContentsString, fileContents);
 
                 Console.WriteLine($"Tracker URL: {torrentFile.Announce}");
                 Console.WriteLine($"Length: {torrentFile.Info.Length}");
@@ -47,11 +47,11 @@ class CommandHandler
         }
     }
 
-    private static string GetInfoHash(string fileContentsString)
+    private static string GetInfoHash(string fileContentsString, byte[] fileContents)
     {
         string infoMarker = "4:infod";
         int hashingStartIndex = fileContentsString.IndexOf(infoMarker) + infoMarker.Length - 1;
-        byte[] fileContentsToHash = Encoding.ASCII.GetBytes(fileContentsString[hashingStartIndex..^1]);
+        byte[] fileContentsToHash = fileContents[hashingStartIndex..^1];
         byte[] hashedFileContents = SHA1.HashData(fileContentsToHash);
         return Convert.ToHexString(hashedFileContents).ToLower();
     }
@@ -68,7 +68,6 @@ class CommandHandler
         }
         
         int piecesLength = int.Parse(fileContentsString[piecesStartIndex..lengthStartIndex]);
-        Console.Error.WriteLine($"Pieces Length: {piecesLength}");
         int piecesDataStartIndex = lengthStartIndex + 1; // Skip the ':' character
         byte[] pieces = fileContents[piecesDataStartIndex..(piecesDataStartIndex + piecesLength)];
 
