@@ -28,19 +28,56 @@ class CommandHandler
                 Decode.DecodeInput(fileContentsString, 0, out string decodedFileContents);
                 TorrentFile torrentFile = JsonSerializer.Deserialize<TorrentFile>(decodedFileContents, jsonSerializerOptions)!;
 
-                string infoMarker = "4:infod";
-                int hashingStartIndex = fileContentsString.IndexOf(infoMarker) + infoMarker.Length - 1;
-                byte[] fileContentsToHash = fileContents[hashingStartIndex..^1];
-                byte[] hashedFileContents = SHA1.HashData(fileContentsToHash);
-                string InfoHash = Convert.ToHexString(hashedFileContents).ToLower();
+                string InfoHash = GetInfoHash(fileContentsString);
 
                 Console.WriteLine($"Tracker URL: {torrentFile.Announce}");
                 Console.WriteLine($"Length: {torrentFile.Info.Length}");
                 Console.WriteLine($"Info Hash: {InfoHash}");
                 Console.WriteLine($"Piece Length: {torrentFile.Info.PieceLength}");
+                Console.WriteLine("Piece Hashes:");
+
+                string[] pieceStrings = GetPieceStrings(fileContentsString, fileContents);
+                foreach (string pieceString in pieceStrings)
+                {
+                    Console.WriteLine(pieceString);
+                }
                 break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
         }
+    }
+
+    private static string GetInfoHash(string fileContentsString)
+    {
+        string infoMarker = "4:infod";
+        int hashingStartIndex = fileContentsString.IndexOf(infoMarker) + infoMarker.Length - 1;
+        byte[] fileContentsToHash = Encoding.ASCII.GetBytes(fileContentsString[hashingStartIndex..^1]);
+        byte[] hashedFileContents = SHA1.HashData(fileContentsToHash);
+        return Convert.ToHexString(hashedFileContents).ToLower();
+    }
+
+    private static string[] GetPieceStrings(string fileContentsString, byte[] fileContents)
+    {
+        List<string> pieceStrings = new();
+        string piecesMarker = "6:pieces";
+        int piecesStartIndex = fileContentsString.IndexOf(piecesMarker) + piecesMarker.Length;
+        int lengthStartIndex = piecesStartIndex;
+        while (char.IsDigit(fileContentsString[lengthStartIndex]))
+        {
+            lengthStartIndex++;
+        }
+        
+        int piecesLength = int.Parse(fileContentsString[piecesStartIndex..lengthStartIndex]);
+        Console.Error.WriteLine($"Pieces Length: {piecesLength}");
+        int piecesDataStartIndex = lengthStartIndex + 1; // Skip the ':' character
+        byte[] pieces = fileContents[piecesDataStartIndex..(piecesDataStartIndex + piecesLength)];
+
+        for (int i = 0; i < pieces.Length; i += 20)
+        {
+            byte[] pieceHash = pieces[i..(i + 20)];
+            pieceStrings.Add(Convert.ToHexString(pieceHash).ToLower());
+        }
+
+        return pieceStrings.ToArray();
     }
 }
