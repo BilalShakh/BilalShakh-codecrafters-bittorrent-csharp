@@ -8,4 +8,4 @@ var (command, param) = args.Length switch
     _ => (args[0], args[1])
 };
 
-CommandHandler.HandleCommand(args);
+await CommandHandler.HandleCommand(args);

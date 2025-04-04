@@ -7,5 +7,5 @@ public record TorrentFileInfo
     public long Length { get; set; }
     public string? Pieces { get; set; }
     [JsonPropertyName("piece length")]
-    public int? PieceLength { get; set; }
+    public required int PieceLength { get; set; }
 }
