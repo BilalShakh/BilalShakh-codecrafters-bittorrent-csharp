@@ -5,7 +5,6 @@ namespace codecrafters_bittorrent.src.Data;
 public record TorrentFileInfo
 {
     public long Length { get; set; }
-    public string? Pieces { get; set; }
     [JsonPropertyName("piece length")]
     public required int PieceLength { get; set; }
 }

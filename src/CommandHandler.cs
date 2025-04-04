@@ -15,6 +15,7 @@ class CommandHandler
     {
         string command = args[0];
         string param = args.Length > 1 ? args[1] : string.Empty;
+        string peerDetails = args.Length > 2 ? args[2] : string.Empty;
 
         switch (command)
         {
@@ -26,6 +27,9 @@ class CommandHandler
                 break;
             case "peers":
                 await HandlePeers(param);
+                break;
+            case "handshake":
+                HandleHandshake(param, peerDetails);
                 break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
@@ -99,6 +103,21 @@ class CommandHandler
             int peerPort = (peer[4] << 8) + peer[5];
             Console.WriteLine($"{ip}:{peerPort}");
         }
+    }
+
+    private static void HandleHandshake(string param, string peerDetails)
+    {
+        string[] peerParts = peerDetails.Split(':');
+        string ip = peerParts[0];
+        int port = int.Parse(peerParts[1]);
+        TorrentInfoCommandResult torrentInfo = GetTorrentInfo(param);
+
+        PeerClient peerClient = new(ip, port);
+        byte[] infoHash = Convert.FromHexString(torrentInfo.InfoHash);
+        byte[] peerId = Encoding.ASCII.GetBytes(Utils.Generate20DigitRandomNumber());
+        byte[] response = peerClient.PerformHandshake(infoHash, peerId);
+
+        Console.WriteLine($"Peer ID: {Convert.ToHexString(response).ToLower()}");
     }
 
     private static string GetInfoHash(string fileContentsString, byte[] fileContents)
