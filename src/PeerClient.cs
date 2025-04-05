@@ -37,7 +37,33 @@ class PeerClient
         _stream.Write(handshake, 0, handshake.Length);
         byte[] response = new byte[68];
         _stream.ReadExactly(response);
-        return response[(handshake.Length-20)..];
+        return response;
+    }
+
+    public byte[] PerformExtensionHandshake()
+    {
+        Dictionary<string, string> extensionHandshake = new()
+        {
+            { "m", "d11:ut_metadatai16ee" }
+        };
+        string payloadString = Encode.EncodeDictionary(extensionHandshake); 
+        Console.Error.WriteLine($"Payload: {payloadString}");
+        byte[] payload = Encoding.UTF8.GetBytes(payloadString);
+
+        byte[] message =
+        [
+            .. BitConverter.GetBytes(payload.Length + 2).Reverse(),
+            MessageTypes.Extension,
+            0,
+            .. payload,
+        ];
+
+        _stream.Write(message);
+        Console.Error.WriteLine($"Sent extension handshake: {BitConverter.ToString(message)}");
+        byte[] response = new byte[1024];
+        //_stream.ReadExactly(response);
+        Console.Error.WriteLine($"Received extension handshake: {BitConverter.ToString(response)}");
+        return response;
     }
 
     public byte[] DownloadPiece(TorrentInfoCommandResult infoCommandResult, int pieceIndex)
@@ -71,12 +97,6 @@ class PeerClient
         _client.Close();
     }
 
-    public void Start()
-    {
-        _client = new TcpClient(_host, _port);
-        _stream = _client.GetStream();
-    }
-
     private static byte[] CreateRequestMessage(int pieceIndex, int offset, int length)
     {
         Console.Error.WriteLine($"Requesting piece {pieceIndex} with offset {offset} and length {length}");
@@ -91,7 +111,7 @@ class PeerClient
         return [.. message];
     }
 
-    private byte[] ReadMessage(byte messageId)
+    public byte[] ReadMessage(byte messageId)
     {
         var messageLength = ReadMessageLength();
         var messageIdByte = _stream.ReadByte();
@@ -116,6 +136,14 @@ class PeerClient
         byte[] lengthBuffer = new byte[4];
         _stream.ReadExactly(lengthBuffer, 0, lengthBuffer.Length);
         return BitConverter.ToInt32(lengthBuffer.Reverse().ToArray(), 0);
+    }
+
+    public bool ReadMessageType(byte messageId)
+    {
+        byte[] buffer = new byte[6];
+        _stream.ReadExactly(buffer, 0, buffer.Length);
+        Console.Error.WriteLine($"Read message type: {buffer[4]}");
+        return buffer[4] == messageId;
     }
 
     private static bool VerifyPieceIntegrity(byte[] pieceBytes, string originalHash)

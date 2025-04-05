@@ -7,4 +7,5 @@ public class MessageTypes
     public const byte Unchoke = 1;
     public const byte Request = 6;
     public const byte Piece = 7;
+    public const byte Extension = 20;
 }

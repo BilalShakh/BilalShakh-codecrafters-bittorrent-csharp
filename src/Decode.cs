@@ -27,7 +27,6 @@ class Decode
         }
     }
 
-
     private static int DecodeDictionary(string data, int start, out string result)
     {
         Dictionary<string, string> resultDict = [];

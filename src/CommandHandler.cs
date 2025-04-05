@@ -93,7 +93,7 @@ class CommandHandler
         byte[] peerId = Encoding.ASCII.GetBytes(Utils.Generate20DigitRandomNumber());
         byte[] response = peerClient.PerformHandshake(infoHash, peerId);
 
-        Console.WriteLine($"Peer ID: {Convert.ToHexString(response).ToLower()}");
+        Console.WriteLine($"Peer ID: {Convert.ToHexString(response[(response.Length - 20)..]).ToLower()}");
     }
 
     private static async Task HandleDownloadPiece(string[] args)
@@ -191,7 +191,19 @@ class CommandHandler
         byte[] infoHash = Convert.FromHexString(parsedMagnetLink.InfoHash);
         byte[] peerId = Encoding.ASCII.GetBytes(Utils.Generate20DigitRandomNumber());
         byte[] response = peerClient.PerformHandshake(infoHash, peerId, true);
-        Console.WriteLine($"Peer ID: {Convert.ToHexString(response).ToLower()}");
+
+        string responseString = Convert.ToHexString(response);
+        string extensionsString = responseString[40..56];
+        bool supportsExtensions = extensionsString[10] == '1';
+
+        Console.WriteLine($"Peer ID: {Convert.ToHexString(response[(response.Length - 20)..]).ToLower()}");
+
+        peerClient.ReadMessageType(MessageTypes.Bitfield);
+
+        if (supportsExtensions)
+        {
+            peerClient.PerformExtensionHandshake();
+        }
     }
 
     private static string GetInfoHash(string fileContentsString, byte[] fileContents)
