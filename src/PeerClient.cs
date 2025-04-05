@@ -7,11 +7,15 @@ namespace codecrafters_bittorrent.src;
 
 class PeerClient
 {
-    private readonly TcpClient _client;
-    private readonly NetworkStream _stream;
+    private TcpClient _client;
+    private NetworkStream _stream;
+    private string _host;
+    private int _port;
 
     public PeerClient(string host, int port)
     {
+        _host = host;
+        _port = port;
         _client = new TcpClient(host, port);
         _stream = _client.GetStream();
     }
@@ -54,6 +58,18 @@ class PeerClient
         }
 
         return pieceBytes;
+    }
+
+    public void Stop()
+    {
+        _stream.Close();
+        _client.Close();
+    }
+
+    public void Start()
+    {
+        _client = new TcpClient(_host, _port);
+        _stream = _client.GetStream();
     }
 
     private static byte[] CreateRequestMessage(int pieceIndex, int offset, int length)

@@ -1,4 +1,5 @@
 ﻿using codecrafters_bittorrent.src.Data;
+using System.Collections.Concurrent;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -31,6 +32,9 @@ class CommandHandler
                 break;
             case "download_piece":
                 await HandleDownloadPiece(args);
+                break;
+            case "download":
+                await HandleDownload(args);
                 break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
@@ -104,6 +108,62 @@ class CommandHandler
         File.WriteAllBytes(downloadPath, pieceBytes);
         
         Console.WriteLine($"Piece {pieceIndex} downloaded to {downloadPath}");
+    }
+
+    private static async Task HandleDownload(string[] args)
+    {
+        string downloadPath = args[2];
+        string torrentFileName = args[3];
+
+        List<Peer> peers = await GetPeers(torrentFileName);
+        TorrentInfoCommandResult torrentInfo = GetTorrentInfo(torrentFileName);
+        ConcurrentQueue<Peer> peerQueue = new(peers);
+
+        byte[] infoHash = Convert.FromHexString(torrentInfo.InfoHash);
+        byte[] peerId = Encoding.ASCII.GetBytes(Utils.Generate20DigitRandomNumber());
+
+        List<byte[]> piecesBytes = [.. new byte[torrentInfo.Pieces.Length][]];
+        List<Task> downloadTasks = [];
+
+        for (int i = 0; i < torrentInfo.Pieces.Length; i++)
+        {
+            int pieceIndex = i;
+            downloadTasks.Add(Task.Run(async () =>
+            {
+                while (true)
+                {
+                    if (peerQueue.TryDequeue(out Peer peer))
+                    {
+                        try
+                        {
+                            PeerClient peerClient = new(peer.IP, peer.Port);
+                            peerClient.PerformHandshake(infoHash, peerId);
+                            byte[] pieceBytes = peerClient.DownloadPiece(torrentInfo, pieceIndex);
+                            piecesBytes[pieceIndex] = pieceBytes;
+                            peerQueue.Enqueue(peer);
+                            peerClient.Stop();
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.Error.WriteLine($"Error downloading piece {pieceIndex} from {peer.IP}:{peer.Port} - {ex.Message}");
+                            peerQueue.Enqueue(peer);
+                        }
+                    }
+                    else
+                    {
+                        await Task.Delay(100); // Wait for a peer to become available
+                    }
+                }
+            }));
+        }
+
+        await Task.WhenAll(downloadTasks);
+
+        byte[] fileBytes = piecesBytes.SelectMany(x => x).ToArray();
+        File.WriteAllBytes(downloadPath, fileBytes);
+
+        Console.WriteLine($"Download completed and saved to {downloadPath}");
     }
 
     private static string GetInfoHash(string fileContentsString, byte[] fileContents)
