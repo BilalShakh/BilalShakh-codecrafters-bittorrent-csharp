@@ -36,6 +36,9 @@ class CommandHandler
             case "download":
                 await HandleDownload(args);
                 break;
+            case "magnet_parse":
+                HandleMagnetParse(args);
+                break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
         }
@@ -166,6 +169,15 @@ class CommandHandler
         Console.WriteLine($"Download completed and saved to {downloadPath}");
     }
 
+    private static void HandleMagnetParse(string[] args)
+    {
+        string magnetLink = args[1];
+        MagnetLink parsedMagnetLink = ParseMagnetLink(magnetLink);
+
+        Console.WriteLine($"Tracker URL: {parsedMagnetLink.TrackerURL}");
+        Console.WriteLine($"Info Hash: {parsedMagnetLink.InfoHash}");
+    }
+
     private static string GetInfoHash(string fileContentsString, byte[] fileContents)
     {
         string infoMarker = "4:infod";
@@ -271,5 +283,22 @@ class CommandHandler
         }
 
         return peersList;
+    }
+
+    private static MagnetLink ParseMagnetLink(string magnetLink)
+    {
+        if (magnetLink[magnetLink.Length - 1] != '&')
+        {
+            magnetLink += "&";
+        }
+        string infoHash = Utils.GetContainedSubstring(magnetLink, "xt=urn:btih:", "&dn=");
+        string Name = Utils.GetContainedSubstring(magnetLink, "dn=", "&tr=");
+        string TrackerURL = Utils.GetContainedSubstring(magnetLink, "tr=", "&");
+        return new MagnetLink
+        {
+            InfoHash = infoHash,
+            Name = Name,
+            TrackerURL = Uri.UnescapeDataString(TrackerURL)
+        };
     }
 }

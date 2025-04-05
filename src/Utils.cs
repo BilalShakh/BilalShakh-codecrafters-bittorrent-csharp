@@ -16,4 +16,11 @@ class Utils
 
         return sb.ToString();
     }
+
+    public static string GetContainedSubstring(string str, string start, string end)
+    {
+        int startIndex = str.IndexOf(start) + start.Length;
+        int endIndex = str.IndexOf(end, startIndex);
+        return str.Substring(startIndex, endIndex - startIndex);
+    }
 }
