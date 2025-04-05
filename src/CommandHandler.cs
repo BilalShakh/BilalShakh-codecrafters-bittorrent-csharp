@@ -39,6 +39,9 @@ class CommandHandler
             case "magnet_parse":
                 HandleMagnetParse(args);
                 break;
+            case "magnet_handshake":
+                await HandleMagnetHandshake(args);
+                break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
         }
@@ -178,6 +181,19 @@ class CommandHandler
         Console.WriteLine($"Info Hash: {parsedMagnetLink.InfoHash}");
     }
 
+    private static async Task HandleMagnetHandshake(string[] args)
+    {
+        string magnetLink = args[1];
+        MagnetLink parsedMagnetLink = ParseMagnetLink(magnetLink);
+        List<Peer> peers = await GetMagnetPeers(parsedMagnetLink);
+
+        PeerClient peerClient = new(peers[0].IP, peers[0].Port);
+        byte[] infoHash = Convert.FromHexString(parsedMagnetLink.InfoHash);
+        byte[] peerId = Encoding.ASCII.GetBytes(Utils.Generate20DigitRandomNumber());
+        byte[] response = peerClient.PerformHandshake(infoHash, peerId, true);
+        Console.WriteLine($"Peer ID: {Convert.ToHexString(response).ToLower()}");
+    }
+
     private static string GetInfoHash(string fileContentsString, byte[] fileContents)
     {
         string infoMarker = "4:infod";
@@ -300,5 +316,54 @@ class CommandHandler
             Name = Name,
             TrackerURL = Uri.UnescapeDataString(TrackerURL)
         };
+    }
+
+    private static async Task<List<Peer>> GetMagnetPeers(MagnetLink magnetLink)
+    {
+        byte[] infoHashBytes = Convert.FromHexString(magnetLink.InfoHash);
+        string infoHash = HttpUtility.UrlEncode(infoHashBytes);
+        string peerId = Utils.Generate20DigitRandomNumber();
+        int port = 6881;
+        int uploaded = 0;
+        int downloaded = 0;
+        long left = 999;
+        int compact = 1;
+
+        string query = $"?info_hash={infoHash}&peer_id={peerId}&port={port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&compact={compact}";
+        string url = $"{magnetLink.TrackerURL}{query}";
+
+        HttpResponseMessage response = await httpClient.GetAsync(url);
+        byte[] responseBody = await response.Content.ReadAsByteArrayAsync();
+        string responseString = Encoding.ASCII.GetString(responseBody);
+
+        string peersMarker = "5:peers";
+        int peersStartIndex = responseString.IndexOf(peersMarker) + peersMarker.Length;
+        int lengthStartIndex = peersStartIndex;
+        while (char.IsDigit(responseString[lengthStartIndex]))
+        {
+            lengthStartIndex++;
+        }
+
+        int peersLength = int.Parse(responseString[peersStartIndex..lengthStartIndex]);
+        int peersDataStartIndex = lengthStartIndex + 1; // Skip the ':' character
+        byte[] peers = responseBody[peersDataStartIndex..(peersDataStartIndex + peersLength)];
+
+        List<byte[]> peerList = [];
+        for (int i = 0; i < peers.Length; i += 6)
+        {
+            byte[] peer = new byte[6];
+            Array.Copy(peers, i, peer, 0, 6);
+            peerList.Add(peer);
+        }
+
+        List<Peer> peersList = [];
+        foreach (byte[] peer in peerList)
+        {
+            string ip = $"{peer[0]}.{peer[1]}.{peer[2]}.{peer[3]}";
+            int peerPort = (peer[4] << 8) + peer[5];
+            peersList.Add(new Peer(ip, peerPort));
+        }
+
+        return peersList;
     }
 }

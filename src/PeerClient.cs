@@ -20,12 +20,17 @@ class PeerClient
         _stream = _client.GetStream();
     }
 
-    public byte[] PerformHandshake(byte[] infoHash, byte[] peerId)
+    public byte[] PerformHandshake(byte[] infoHash, byte[] peerId, bool isMagnet = false)
     {
         byte[] handshake = new byte[68];
+        byte[] reserved = new byte[8];
         handshake[0] = 19; // Protocol length
+        if (isMagnet)
+        {
+            reserved[5] = 16;
+        }
         Array.Copy(Encoding.UTF8.GetBytes("BitTorrent protocol"), 0, handshake, 1, 19);
-        Array.Copy(new byte[8], 0, handshake, 20, 8); // Reserved bytes
+        Array.Copy(reserved, 0, handshake, 20, 8); // Reserved bytes
         Array.Copy(infoHash, 0, handshake, 28, 20);
         Array.Copy(peerId, 0, handshake, 48, 20);
 
