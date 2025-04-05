@@ -14,37 +14,40 @@ class CommandHandler
     public static async Task HandleCommand(string[] args)
     {
         string command = args[0];
-        string param = args.Length > 1 ? args[1] : string.Empty;
-        string peerDetails = args.Length > 2 ? args[2] : string.Empty;
 
         switch (command)
         {
             case "decode":
-                HandleDecode(param);
+                HandleDecode(args);
                 break;
             case "info":
-                HandleInfo(param);
+                HandleInfo(args);
                 break;
             case "peers":
-                await HandlePeers(param);
+                await HandlePeers(args);
                 break;
             case "handshake":
-                HandleHandshake(param, peerDetails);
+                HandleHandshake(args);
+                break;
+            case "download_piece":
+                await HandleDownloadPiece(args);
                 break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
         }
     }
 
-    private static void HandleDecode(string param)
+    private static void HandleDecode(string[] args)
     {
+        string param = args[1];
         Console.Error.WriteLine($"Decoding: {param}");
         Decode.DecodeInput(param, 0, out string result);
         Console.WriteLine(result);
     }
 
-    private static void HandleInfo(string param)
+    private static void HandleInfo(string[] args)
     {
+        string param = args[1];
         TorrentInfoCommandResult torrentInfo = GetTorrentInfo(param);
         Console.WriteLine($"Tracker URL: {torrentInfo.TrackerUrl}");
         Console.WriteLine($"Length: {torrentInfo.Length}");
@@ -57,56 +60,19 @@ class CommandHandler
         }
     }
 
-    private static async Task HandlePeers(string param)
+    private static async Task HandlePeers(string[] args)
     {
-        TorrentInfoCommandResult torrentInfo = GetTorrentInfo(param);
-
-        byte[] infoHashBytes = Convert.FromHexString(torrentInfo.InfoHash);
-        string infoHash = HttpUtility.UrlEncode(infoHashBytes);
-        string peerId = Utils.Generate20DigitRandomNumber();
-        int port = 6881;
-        int uploaded = 0;
-        int downloaded = 0;
-        long left = torrentInfo.Length;
-        int compact = 1;
-
-        string query = $"?info_hash={infoHash}&peer_id={peerId}&port={port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&compact={compact}";
-        string url = $"{torrentInfo.TrackerUrl}{query}";
-
-        HttpResponseMessage response = await httpClient.GetAsync(url);
-        byte[] responseBody = await response.Content.ReadAsByteArrayAsync();
-        string responseString = Encoding.ASCII.GetString(responseBody);
-
-        string peersMarker = "5:peers";
-        int peersStartIndex = responseString.IndexOf(peersMarker) + peersMarker.Length;
-        int lengthStartIndex = peersStartIndex;
-        while (char.IsDigit(responseString[lengthStartIndex]))
+        List<Peer> peers = await GetPeers(args[1]);
+        foreach (Peer peer in peers)
         {
-            lengthStartIndex++;
-        }
-        
-        int peersLength = int.Parse(responseString[peersStartIndex..lengthStartIndex]);
-        int peersDataStartIndex = lengthStartIndex + 1; // Skip the ':' character
-        byte[] peers = responseBody[peersDataStartIndex..(peersDataStartIndex + peersLength)];
-        
-        List<byte[]> peerList = [];
-        for (int i = 0; i < peers.Length; i += 6)
-        {
-            byte[] peer = new byte[6];
-            Array.Copy(peers, i, peer, 0, 6);
-            peerList.Add(peer);
-        }
-
-        foreach (byte[] peer in peerList)
-        {
-            string ip = $"{peer[0]}.{peer[1]}.{peer[2]}.{peer[3]}";
-            int peerPort = (peer[4] << 8) + peer[5];
-            Console.WriteLine($"{ip}:{peerPort}");
+            Console.WriteLine(peer.ToString());
         }
     }
 
-    private static void HandleHandshake(string param, string peerDetails)
+    private static void HandleHandshake(string[] args)
     {
+        string param = args[1];
+        string peerDetails = args[2];
         string[] peerParts = peerDetails.Split(':');
         string ip = peerParts[0];
         int port = int.Parse(peerParts[1]);
@@ -118,6 +84,26 @@ class CommandHandler
         byte[] response = peerClient.PerformHandshake(infoHash, peerId);
 
         Console.WriteLine($"Peer ID: {Convert.ToHexString(response).ToLower()}");
+    }
+
+    private static async Task HandleDownloadPiece(string[] args)
+    {
+        string downloadPath = args[2];
+        string torrentFileName = args[3];
+        int pieceIndex = int.Parse(args[4]);
+
+        List<Peer> peers = await GetPeers(torrentFileName);
+        TorrentInfoCommandResult torrentInfo = GetTorrentInfo(torrentFileName);
+        PeerClient peerClient = new(peers[0].IP, peers[0].Port);
+
+        byte[] infoHash = Convert.FromHexString(torrentInfo.InfoHash);
+        byte[] peerId = Encoding.ASCII.GetBytes(Utils.Generate20DigitRandomNumber());
+        peerClient.PerformHandshake(infoHash, peerId);
+
+        byte[] pieceBytes = peerClient.DownloadPiece(torrentInfo, pieceIndex);
+        File.WriteAllBytes(downloadPath, pieceBytes);
+        
+        Console.WriteLine($"Piece {pieceIndex} downloaded to {downloadPath}");
     }
 
     private static string GetInfoHash(string fileContentsString, byte[] fileContents)
@@ -153,10 +139,10 @@ class CommandHandler
         return pieceStrings.ToArray();
     }
 
-    private static TorrentInfoCommandResult GetTorrentInfo(string param)
+    private static TorrentInfoCommandResult GetTorrentInfo(string fileName)
     {
-        Console.Error.WriteLine($"Getting info for: {param}");
-        byte[] fileContents = File.ReadAllBytes(param);
+        Console.Error.WriteLine($"Getting info for: {fileName}");
+        byte[] fileContents = File.ReadAllBytes(fileName);
         string fileContentsString = Encoding.ASCII.GetString(fileContents);
         Decode.DecodeInput(fileContentsString, 0, out string decodedFileContents);
         TorrentFile torrentFile = JsonSerializer.Deserialize<TorrentFile>(decodedFileContents, jsonSerializerOptions)!;
@@ -174,5 +160,56 @@ class CommandHandler
             Pieces = pieceStrings,
             FileLength = fileContents.Length
         };
+    }
+
+    private static async Task<List<Peer>> GetPeers(string fileName)
+    {
+        TorrentInfoCommandResult torrentInfo = GetTorrentInfo(fileName);
+
+        byte[] infoHashBytes = Convert.FromHexString(torrentInfo.InfoHash);
+        string infoHash = HttpUtility.UrlEncode(infoHashBytes);
+        string peerId = Utils.Generate20DigitRandomNumber();
+        int port = 6881;
+        int uploaded = 0;
+        int downloaded = 0;
+        long left = torrentInfo.Length;
+        int compact = 1;
+
+        string query = $"?info_hash={infoHash}&peer_id={peerId}&port={port}&uploaded={uploaded}&downloaded={downloaded}&left={left}&compact={compact}";
+        string url = $"{torrentInfo.TrackerUrl}{query}";
+
+        HttpResponseMessage response = await httpClient.GetAsync(url);
+        byte[] responseBody = await response.Content.ReadAsByteArrayAsync();
+        string responseString = Encoding.ASCII.GetString(responseBody);
+
+        string peersMarker = "5:peers";
+        int peersStartIndex = responseString.IndexOf(peersMarker) + peersMarker.Length;
+        int lengthStartIndex = peersStartIndex;
+        while (char.IsDigit(responseString[lengthStartIndex]))
+        {
+            lengthStartIndex++;
+        }
+
+        int peersLength = int.Parse(responseString[peersStartIndex..lengthStartIndex]);
+        int peersDataStartIndex = lengthStartIndex + 1; // Skip the ':' character
+        byte[] peers = responseBody[peersDataStartIndex..(peersDataStartIndex + peersLength)];
+
+        List<byte[]> peerList = [];
+        for (int i = 0; i < peers.Length; i += 6)
+        {
+            byte[] peer = new byte[6];
+            Array.Copy(peers, i, peer, 0, 6);
+            peerList.Add(peer);
+        }
+
+        List<Peer> peersList = [];
+        foreach (byte[] peer in peerList)
+        {
+            string ip = $"{peer[0]}.{peer[1]}.{peer[2]}.{peer[3]}";
+            int peerPort = (peer[4] << 8) + peer[5];
+            peersList.Add(new Peer(ip, peerPort));
+        }
+
+        return peersList;
     }
 }
