@@ -7,7 +7,6 @@ class Decode
 {
     public static int DecodeInput(string data, int start, out string result)
     {
-        Console.Error.WriteLine($"Decoding input: {data} at position {start}");
         switch (data[start])
         {
             case 'i':
@@ -30,7 +29,6 @@ class Decode
 
     private static int DecodeDictionary(string data, int start, out string result)
     {
-        Console.Error.WriteLine($"Decoding dictionary: {data} at position {start}");
         Dictionary<string, string> resultDict = [];
         start++;
 
