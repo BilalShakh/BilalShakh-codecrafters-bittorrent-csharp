@@ -31,10 +31,10 @@ class CommandHandler
                 HandleHandshake(args);
                 break;
             case "download_piece":
-                await HandleDownloadPiece(args);
+                await HandleTorrentFileDownloadPiece(args);
                 break;
             case "download":
-                await HandleDownload(args);
+                await HandleTorrentFileDownload(args);
                 break;
             case "magnet_parse":
                 HandleMagnetParse(args);
@@ -44,6 +44,9 @@ class CommandHandler
                 break;
             case "magnet_info":
                 await HandleMagnetInfo(args);
+                break;
+            case "magnet_download_piece":
+                await HandleMagnetDownloadPiece(args);
                 break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
@@ -99,7 +102,7 @@ class CommandHandler
         Console.WriteLine($"Peer ID: {Convert.ToHexString(response[(response.Length - 20)..]).ToLower()}");
     }
 
-    private static async Task HandleDownloadPiece(string[] args)
+    private static async Task HandleTorrentFileDownloadPiece(string[] args)
     {
         string downloadPath = args[2];
         string torrentFileName = args[3];
@@ -119,7 +122,7 @@ class CommandHandler
         Console.WriteLine($"Piece {pieceIndex} downloaded to {downloadPath}");
     }
 
-    private static async Task HandleDownload(string[] args)
+    private static async Task HandleTorrentFileDownload(string[] args)
     {
         string downloadPath = args[2];
         string torrentFileName = args[3];
@@ -173,6 +176,25 @@ class CommandHandler
         File.WriteAllBytes(downloadPath, fileBytes);
 
         Console.WriteLine($"Download completed and saved to {downloadPath}");
+    }
+
+    private static async Task HandleMagnetDownloadPiece(string[] args)
+    {
+        string downloadPath = args[2];
+        string magnetLink = args[3];
+        int pieceIndex = int.Parse(args[4]);
+        MagnetLink parsedMagnetLink = ParseMagnetLink(magnetLink);
+        List<Peer> peers = await GetMagnetPeers(parsedMagnetLink);
+        TorrentInfoCommandResult torrentInfo = await GetMagnetInfo(magnetLink);
+
+        PeerClient peerClient = new(peers[0].IP, peers[0].Port);
+        byte[] infoHash = Convert.FromHexString(parsedMagnetLink.InfoHash);
+        byte[] peerId = Encoding.ASCII.GetBytes(Utils.Generate20DigitRandomNumber());
+        peerClient.PerformHandshake(infoHash, peerId);
+
+        byte[] pieceBytes = peerClient.DownloadPiece(torrentInfo, pieceIndex);
+        File.WriteAllBytes(downloadPath, pieceBytes);
+        Console.WriteLine($"Piece {pieceIndex} downloaded to {downloadPath}");
     }
 
     private static void HandleMagnetParse(string[] args)
