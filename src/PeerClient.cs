@@ -69,6 +69,30 @@ class PeerClient
         return response;
     }
 
+    public byte[] MakeMetadataRequest(int pieceIndex, int metadataId)
+    {
+        Dictionary<string, string> metadataRequest = new()
+        {
+            { "msg_type", "0" },
+            { "piece", pieceIndex.ToString() }
+        };
+        string payloadString = Encode.EncodeDictionary(metadataRequest);
+        byte[] payload = Encoding.UTF8.GetBytes(payloadString);
+        byte[] message =
+        [
+            .. BitConverter.GetBytes(payload.Length + 2).Reverse(),
+            MessageTypes.Extension,
+            (byte)metadataId,
+            .. payload,
+        ];
+        _stream.Write(message);
+
+        byte[] response = new byte[13];
+        //_stream.ReadExactly(response, 0, response.Length);
+
+        return response;
+    }
+
     public byte[] DownloadPiece(TorrentInfoCommandResult infoCommandResult, int pieceIndex)
     {
         ReadMessage(MessageTypes.Bitfield);

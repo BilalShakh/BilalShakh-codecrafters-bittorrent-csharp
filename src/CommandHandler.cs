@@ -42,6 +42,9 @@ class CommandHandler
             case "magnet_handshake":
                 await HandleMagnetHandshake(args);
                 break;
+            case "magnet_info":
+                await HandleMagnetInfo(args);
+                break;
             default:
                 throw new InvalidOperationException($"Invalid command: {command}");
         }
@@ -184,28 +187,13 @@ class CommandHandler
     private static async Task HandleMagnetHandshake(string[] args)
     {
         string magnetLink = args[1];
-        MagnetLink parsedMagnetLink = ParseMagnetLink(magnetLink);
-        List<Peer> peers = await GetMagnetPeers(parsedMagnetLink);
+        var (peerId, supportsExtensions, handshakeResponseString, _) = await PerformMagnetLinkHandshake(magnetLink);
 
-        PeerClient peerClient = new(peers[0].IP, peers[0].Port);
-        byte[] infoHash = Convert.FromHexString(parsedMagnetLink.InfoHash);
-        byte[] peerId = Encoding.ASCII.GetBytes(Utils.Generate20DigitRandomNumber());
-        byte[] response = peerClient.PerformHandshake(infoHash, peerId, true);
-
-        string responseString = Convert.ToHexString(response);
-        string extensionsString = responseString[40..56];
-        bool supportsExtensions = extensionsString[10] == '1';
-
-        Console.WriteLine($"Peer ID: {Convert.ToHexString(response[(response.Length - 20)..]).ToLower()}");
-
-        peerClient.ReadMessageType(MessageTypes.Bitfield);
+        Console.WriteLine($"Peer ID: {peerId}");
 
         if (supportsExtensions)
         {
-            byte[] handshakeResponse = peerClient.PerformExtensionHandshake();
-            string handshakeResponseString = Encoding.UTF8.GetString(handshakeResponse);
-
-                // Deserialize the JSON string into a nested dictionary
+            // Deserialize the JSON string into a nested dictionary
             Decode.DecodeInput(handshakeResponseString, 2, out string decodedHandshakeResponse);
             var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
             var decodedDict = JsonSerializer.Deserialize<Dictionary<string, object>>(decodedHandshakeResponse, options);
@@ -218,6 +206,29 @@ class CommandHandler
                     Console.WriteLine($"Peer Metadata Extension ID: {utMetadata}");
                 }
             }
+        }
+    }
+
+    private static async Task HandleMagnetInfo(string[] args)
+    {
+        string magnetLink = args[1];
+        var (peerId, supportsExtensions, handshakeResponseString, peerClient) = await PerformMagnetLinkHandshake(magnetLink);
+        if (supportsExtensions)
+        {
+            int metadataId = 0;
+            Decode.DecodeInput(handshakeResponseString, 2, out string decodedHandshakeResponse);
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var decodedDict = JsonSerializer.Deserialize<Dictionary<string, object>>(decodedHandshakeResponse, options);
+
+            if (decodedDict != null && decodedDict.TryGetValue("m", out var mValue) && mValue is JsonElement mElement)
+            {
+                var mDict = JsonSerializer.Deserialize<Dictionary<string, int>>(mElement.GetRawText(), options);
+                if (mDict != null && mDict.TryGetValue("ut_metadata", out int utMetadata))
+                {
+                    metadataId = utMetadata;
+                }
+            }
+            peerClient.MakeMetadataRequest(0, metadataId);
         }
     }
 
@@ -391,5 +402,32 @@ class CommandHandler
         }
 
         return peersList;
+    }
+
+    private static async Task<(string peerId, bool supportsExtensions, string handshakeResponseString, PeerClient peerClient)> PerformMagnetLinkHandshake(string magnetLink)
+    {
+        MagnetLink parsedMagnetLink = ParseMagnetLink(magnetLink);
+        List<Peer> peers = await GetMagnetPeers(parsedMagnetLink);
+
+        PeerClient peerClient = new(peers[0].IP, peers[0].Port);
+        byte[] infoHash = Convert.FromHexString(parsedMagnetLink.InfoHash);
+        byte[] peerIdBytes = Encoding.ASCII.GetBytes(Utils.Generate20DigitRandomNumber());
+        byte[] response = peerClient.PerformHandshake(infoHash, peerIdBytes, true);
+
+        string responseString = Convert.ToHexString(response);
+        string extensionsString = responseString[40..56];
+        bool supportsExtensions = extensionsString[10] == '1';
+        string peerId = Convert.ToHexString(response[(response.Length - 20)..]).ToLower();
+
+        peerClient.ReadMessageType(MessageTypes.Bitfield);
+        string handshakeResponseString = string.Empty;
+
+        if (supportsExtensions)
+        {
+            byte[] handshakeResponse = peerClient.PerformExtensionHandshake();
+            handshakeResponseString = Encoding.UTF8.GetString(handshakeResponse);
+        }
+
+        return (peerId, supportsExtensions, handshakeResponseString, peerClient);
     }
 }

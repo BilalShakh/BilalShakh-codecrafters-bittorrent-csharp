@@ -16,7 +16,14 @@ namespace codecrafters_bittorrent.src
                 }
                 else
                 {
-                    sb.Append(EncodeString(kvp.Value));
+                    if (int.TryParse(kvp.Value, out int res))
+                    {
+                        sb.Append(EncodeInt(res));
+                    }
+                    else
+                    {
+                        sb.Append(EncodeString(kvp.Value));
+                    }
                 }
             }
             sb.Append("e");
@@ -26,6 +33,11 @@ namespace codecrafters_bittorrent.src
         public static string EncodeString(string str)
         {
             return $"{str.Length}:{str}";
+        }
+
+        public static string EncodeInt(int value)
+        {
+            return $"i{value}e";
         }
 
         private static bool IsEncoded(string str)
