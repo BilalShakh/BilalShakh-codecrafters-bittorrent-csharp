@@ -87,8 +87,28 @@ class PeerClient
         ];
         _stream.Write(message);
 
-        byte[] response = new byte[13];
-        //_stream.ReadExactly(response, 0, response.Length);
+        //byte[] responseLengthBytes = new byte[4];
+        //_stream.ReadExactly(responseLengthBytes, 0, 4);
+        //int responseLength = BitConverter.ToInt32(responseLengthBytes.Reverse().ToArray(), 0);
+
+        //byte[] responseIdBytes = new byte[1];
+        //_stream.ReadExactly(responseIdBytes, 0, 1);
+        //byte responseId = responseIdBytes[0];
+        //if (responseId != MessageTypes.Extension)
+        //{
+        //    throw new Exception($"Expected message type {MessageTypes.Extension}, but got {responseId}");
+        //}
+
+        //byte[] extenstionMessageIdBytes = new byte[1];
+        //_stream.ReadExactly(extenstionMessageIdBytes, 0, 1);
+        //byte extensionMessageId = extenstionMessageIdBytes[0];
+        //if (extensionMessageId != metadataId)
+        //{
+        //    throw new Exception($"Expected message type {metadataId}, but got {extensionMessageId}");
+        //}
+
+        byte[] response = new byte[10 - 2];
+        //_stream.ReadExactly(response, 0, response.Length - 2);
 
         return response;
     }

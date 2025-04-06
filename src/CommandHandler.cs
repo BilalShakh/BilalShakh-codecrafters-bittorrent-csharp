@@ -226,9 +226,13 @@ class CommandHandler
                 if (mDict != null && mDict.TryGetValue("ut_metadata", out int utMetadata))
                 {
                     metadataId = utMetadata;
+                    byte[] metaDataDictBytes = peerClient.MakeMetadataRequest(0, metadataId);
+                    //string metaDataDictString = Encoding.UTF8.GetString(metaDataDictBytes);
+                    //Decode.DecodeInput(metaDataDictString, 0, out string decodedMetaDataDict);
+                    //Console.Error.WriteLine($"Decoded Metadata: {decodedMetaDataDict}");
+                    //var metaDataDict = JsonSerializer.Deserialize<Dictionary<string, object>>(decodedMetaDataDict, options);
                 }
             }
-            peerClient.MakeMetadataRequest(0, metadataId);
         }
     }
 
