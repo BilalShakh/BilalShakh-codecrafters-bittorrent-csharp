@@ -212,27 +212,16 @@ class CommandHandler
     private static async Task HandleMagnetInfo(string[] args)
     {
         string magnetLink = args[1];
-        var (peerId, supportsExtensions, handshakeResponseString, peerClient) = await PerformMagnetLinkHandshake(magnetLink);
-        if (supportsExtensions)
-        {
-            int metadataId = 0;
-            Decode.DecodeInput(handshakeResponseString, 2, out string decodedHandshakeResponse);
-            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-            var decodedDict = JsonSerializer.Deserialize<Dictionary<string, object>>(decodedHandshakeResponse, options);
+        TorrentInfoCommandResult info = await GetMagnetInfo(magnetLink);
 
-            if (decodedDict != null && decodedDict.TryGetValue("m", out var mValue) && mValue is JsonElement mElement)
-            {
-                var mDict = JsonSerializer.Deserialize<Dictionary<string, int>>(mElement.GetRawText(), options);
-                if (mDict != null && mDict.TryGetValue("ut_metadata", out int utMetadata))
-                {
-                    metadataId = utMetadata;
-                    byte[] metaDataDictBytes = peerClient.MakeMetadataRequest(0, metadataId);
-                    //string metaDataDictString = Encoding.UTF8.GetString(metaDataDictBytes);
-                    //Decode.DecodeInput(metaDataDictString, 0, out string decodedMetaDataDict);
-                    //Console.Error.WriteLine($"Decoded Metadata: {decodedMetaDataDict}");
-                    //var metaDataDict = JsonSerializer.Deserialize<Dictionary<string, object>>(decodedMetaDataDict, options);
-                }
-            }
+        Console.WriteLine($"Tracker URL: {info.TrackerUrl}");
+        Console.WriteLine($"Length: {info.Length}");
+        Console.WriteLine($"Info Hash: {info.InfoHash}");
+        Console.WriteLine($"Piece Length: {info.PieceLength}");
+        Console.WriteLine("Pieces:");
+        foreach (string piece in info.Pieces)
+        {
+            Console.WriteLine($"  {piece}");
         }
     }
 
@@ -267,6 +256,49 @@ class CommandHandler
         }
 
         return pieceStrings.ToArray();
+    }
+
+    private static async Task<TorrentInfoCommandResult> GetMagnetInfo(string magnetLink)
+    {
+        string piecesMarker = "6:pieces";
+        MagnetLink parsedMagnetLink = ParseMagnetLink(magnetLink);
+        var (peerId, supportsExtensions, handshakeResponseString, peerClient) = await PerformMagnetLinkHandshake(magnetLink);
+        TorrentFileInfo? metaDataDict = null;
+        string[] pieces = [];
+        byte[] metaDataDictBytes = [];
+        
+        if (supportsExtensions)
+        {
+            Decode.DecodeInput(handshakeResponseString, 2, out string decodedHandshakeResponse);
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var decodedDict = JsonSerializer.Deserialize<Dictionary<string, object>>(decodedHandshakeResponse, options);
+
+            if (decodedDict != null && decodedDict.TryGetValue("m", out var mValue) && mValue is JsonElement mElement)
+            {
+                var mDict = JsonSerializer.Deserialize<Dictionary<string, int>>(mElement.GetRawText(), options);
+                if (mDict != null && mDict.TryGetValue("ut_metadata", out int utMetadata))
+                {
+                    int metadataId = utMetadata;
+                    metaDataDictBytes = peerClient.MakeMetadataRequest(0, metadataId);
+                    string metaDataDictString = Encoding.ASCII.GetString(metaDataDictBytes);
+                    int piecesIndex = metaDataDictString.IndexOf(piecesMarker);
+                    Decode.DecodeInput(metaDataDictString[..piecesIndex] + "e", 0, out string decodedMetaDataDict);
+
+                    metaDataDict = JsonSerializer.Deserialize<TorrentFileInfo>(decodedMetaDataDict, options);
+                    pieces = GetPieceStrings(metaDataDictString, metaDataDictBytes);
+                }
+            }
+        }
+
+        return new TorrentInfoCommandResult
+        {
+            TrackerUrl = parsedMagnetLink.TrackerURL,
+            Length = metaDataDict.Length,
+            InfoHash = parsedMagnetLink.InfoHash,
+            PieceLength = metaDataDict.PieceLength,
+            Pieces = pieces,
+            FileLength = metaDataDictBytes.Length
+        };
     }
 
     private static TorrentInfoCommandResult GetTorrentInfo(string fileName)

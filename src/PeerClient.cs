@@ -1,7 +1,9 @@
 ﻿using codecrafters_bittorrent.src.Data;
 using System.Net.Sockets;
+using System.Reflection.Metadata.Ecma335;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 
 namespace codecrafters_bittorrent.src;
 
@@ -11,6 +13,7 @@ class PeerClient
     private NetworkStream _stream;
     private string _host;
     private int _port;
+    private readonly JsonSerializerOptions options = new() { PropertyNameCaseInsensitive = true };
 
     public PeerClient(string host, int port)
     {
@@ -87,30 +90,40 @@ class PeerClient
         ];
         _stream.Write(message);
 
-        //byte[] responseLengthBytes = new byte[4];
-        //_stream.ReadExactly(responseLengthBytes, 0, 4);
-        //int responseLength = BitConverter.ToInt32(responseLengthBytes.Reverse().ToArray(), 0);
+        byte[] responseLengthBytes = new byte[4];
+        _stream.ReadExactly(responseLengthBytes, 0, 4);
+        int responseLength = BitConverter.ToInt32(responseLengthBytes.Reverse().ToArray());
 
-        //byte[] responseIdBytes = new byte[1];
-        //_stream.ReadExactly(responseIdBytes, 0, 1);
-        //byte responseId = responseIdBytes[0];
-        //if (responseId != MessageTypes.Extension)
-        //{
-        //    throw new Exception($"Expected message type {MessageTypes.Extension}, but got {responseId}");
-        //}
+        byte[] responseIdBytes = new byte[2];
+        _stream.ReadExactly(responseIdBytes, 0, 2);
 
-        //byte[] extenstionMessageIdBytes = new byte[1];
-        //_stream.ReadExactly(extenstionMessageIdBytes, 0, 1);
-        //byte extensionMessageId = extenstionMessageIdBytes[0];
-        //if (extensionMessageId != metadataId)
-        //{
-        //    throw new Exception($"Expected message type {metadataId}, but got {extensionMessageId}");
-        //}
+        byte[] metaDataDictBytes = new byte[responseLength - 2];
+        _stream.ReadExactly(metaDataDictBytes, 0, responseLength - 2);
 
-        byte[] response = new byte[10 - 2];
-        //_stream.ReadExactly(response, 0, response.Length - 2);
+        string metaDataDictString = Encoding.UTF8.GetString(metaDataDictBytes);
+        Decode.DecodeInput(metaDataDictString, 0, out string decodedMetaDataDict);
+        var metaDataDict = JsonSerializer.Deserialize<Dictionary<string, object>>(decodedMetaDataDict, options);
+        if (metaDataDict == null)
+        {
+            throw new Exception("Failed to deserialize metadata dictionary");
+        }
 
-        return response;
+        int pieceContentSize = 0;
+        if (metaDataDict.TryGetValue("total_size", out object JsonElement))
+        {
+            JsonElement jElement = (JsonElement)JsonElement;
+            pieceContentSize = Convert.ToInt32(jElement.GetRawText());
+        }
+
+        if (pieceContentSize == 0)
+        {
+            throw new Exception("Failed to get total size of metadata");
+        }
+
+        byte[] pieceContents = new byte[pieceContentSize];
+        Array.Copy(metaDataDictBytes, metaDataDictBytes.Length - pieceContentSize, pieceContents, 0, pieceContentSize);
+
+        return pieceContents;
     }
 
     public byte[] DownloadPiece(TorrentInfoCommandResult infoCommandResult, int pieceIndex)
