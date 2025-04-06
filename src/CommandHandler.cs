@@ -202,7 +202,22 @@ class CommandHandler
 
         if (supportsExtensions)
         {
-            peerClient.PerformExtensionHandshake();
+            byte[] handshakeResponse = peerClient.PerformExtensionHandshake();
+            string handshakeResponseString = Encoding.UTF8.GetString(handshakeResponse);
+
+                // Deserialize the JSON string into a nested dictionary
+            Decode.DecodeInput(handshakeResponseString, 2, out string decodedHandshakeResponse);
+            var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+            var decodedDict = JsonSerializer.Deserialize<Dictionary<string, object>>(decodedHandshakeResponse, options);
+
+            if (decodedDict != null && decodedDict.TryGetValue("m", out var mValue) && mValue is JsonElement mElement)
+            {
+                var mDict = JsonSerializer.Deserialize<Dictionary<string, int>>(mElement.GetRawText(), options);
+                if (mDict != null && mDict.TryGetValue("ut_metadata", out int utMetadata))
+                {
+                    Console.WriteLine($"Peer Metadata Extension ID: {utMetadata}");
+                }
+            }
         }
     }
 
@@ -241,7 +256,6 @@ class CommandHandler
 
     private static TorrentInfoCommandResult GetTorrentInfo(string fileName)
     {
-        Console.Error.WriteLine($"Getting info for: {fileName}");
         byte[] fileContents = File.ReadAllBytes(fileName);
         string fileContentsString = Encoding.ASCII.GetString(fileContents);
         Decode.DecodeInput(fileContentsString, 0, out string decodedFileContents);

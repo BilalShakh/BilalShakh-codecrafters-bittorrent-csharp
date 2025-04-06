@@ -47,7 +47,6 @@ class PeerClient
             { "m", "d11:ut_metadatai16ee" }
         };
         string payloadString = Encode.EncodeDictionary(extensionHandshake); 
-        Console.Error.WriteLine($"Payload: {payloadString}");
         byte[] payload = Encoding.UTF8.GetBytes(payloadString);
 
         byte[] message =
@@ -59,10 +58,14 @@ class PeerClient
         ];
 
         _stream.Write(message);
-        Console.Error.WriteLine($"Sent extension handshake: {BitConverter.ToString(message)}");
-        byte[] response = new byte[1024];
-        //_stream.ReadExactly(response);
-        Console.Error.WriteLine($"Received extension handshake: {BitConverter.ToString(response)}");
+        
+        byte[] messagePrefix = new byte[4];
+        _stream.ReadExactly(messagePrefix,0,4);
+        int messageLength = BitConverter.ToInt32(messagePrefix.Reverse().ToArray(), 0);
+        
+        byte[] response = new byte[messageLength];
+        _stream.ReadExactly(response, 0, messageLength);
+
         return response;
     }
 
@@ -142,7 +145,6 @@ class PeerClient
     {
         byte[] buffer = new byte[6];
         _stream.ReadExactly(buffer, 0, buffer.Length);
-        Console.Error.WriteLine($"Read message type: {buffer[4]}");
         return buffer[4] == messageId;
     }
 
